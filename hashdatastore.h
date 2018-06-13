@@ -6,10 +6,7 @@
 #include "alignment_allocator.h"
 
 
-namespace droidCrypto {
-    class BitVector;
-}
-using droidCrypto::BitVector;
+class BitVector;
 class hashdatastore {
 public:
     typedef __m256i hash_type;

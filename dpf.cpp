@@ -1,31 +1,35 @@
 #include "dpf.h"
-#include "prg.h"
-#include <droidCrypto/Defines.h>
-#include <droidCrypto/PRNG.h>
-#include <droidCrypto/AES.h>
-#include <droidCrypto/Log.h>
+#include "Defines.h"
+#include "PRNG.h"
+#include "AES.h"
+#include "Log.h"
 #include <iostream>
 #include <cassert>
 
-namespace dpf {
-    using droidCrypto::PRNG;
-    using droidCrypto::Log;
-    using droidCrypto::mAesFixedKey;
+namespace DPF {
+    namespace prg {
+        block getL(const block& seed) {
+            return mAesFixedKey.encryptECB(seed);
+        }
 
+        block getR(const block& seed) {
+            return mAesFixedKey2.encryptECB(seed);
+        }
+    }
     block clr(block in) {
-        return in & ~droidCrypto::MSBBlock;
+        return in & ~MSBBlock;
     }
     bool getT(block in) {
-        return !droidCrypto::is_zero(in & droidCrypto::MSBBlock);
+        return !is_zero(in & MSBBlock);
     }
     bool ConvertBit(block in) {
-        return !droidCrypto::is_zero(in & droidCrypto::LSBBlock);
+        return !is_zero(in & LSBBlock);
     }
     block ConvertBlock(block in) {
         return mAesFixedKey.encryptECB(in);
     }
 
-    std::pair<std::vector<uint8_t>, std::vector<uint8_t>> DPF::Gen(size_t alpha, size_t logn) {
+    std::pair<std::vector<uint8_t>, std::vector<uint8_t>> Gen(size_t alpha, size_t logn) {
         assert(logn <= 63);
         assert(alpha < (1<<logn));
         std::vector<uint8_t> ka, kb, CW;
@@ -109,7 +113,7 @@ namespace dpf {
             }
 
         }
-        droidCrypto::reg_arr_union tmp = {droidCrypto::ZeroBlock};
+        reg_arr_union tmp = {ZeroBlock};
         tmp.arr[(alpha&127)/8] = (uint8_t)(1U<<((alpha&127)%8));
         tmp.reg = tmp.reg ^ ConvertBlock(s0) ^ ConvertBlock(s1);
         CW.insert(CW.end(), (uint8_t*)&tmp.reg, ((uint8_t*)&tmp.reg) + sizeof(tmp.reg));
@@ -119,7 +123,7 @@ namespace dpf {
         return std::make_pair(ka, kb);
     }
 
-    bool DPF::Eval(const std::vector<uint8_t>& key, size_t x, size_t logn) {
+    bool Eval(const std::vector<uint8_t>& key, size_t x, size_t logn) {
         assert(logn <= 63);
         assert(x < (1<<logn));
         block s;
@@ -156,14 +160,14 @@ namespace dpf {
         }
         Log::v("evalfin", s);
         if(t) {
-            droidCrypto::reg_arr_union tmp;
-            droidCrypto::reg_arr_union CW;
+            reg_arr_union tmp;
+            reg_arr_union CW;
             memcpy(CW.arr, key.data()+key.size()-16, 16);
             tmp.reg = CW.reg ^ ConvertBlock(s);
             return (tmp.arr[(x&127)/8] & (1UL << ((x&127)%8))) != 0;
         }
         else {
-            droidCrypto::reg_arr_union tmp;
+            reg_arr_union tmp;
             tmp.reg = ConvertBlock(s);
             return (tmp.arr[(x&127)/8] & (1UL << ((x&127)%8))) != 0;
         }
@@ -172,14 +176,14 @@ namespace dpf {
     void EvalFullRecursive(const std::vector<uint8_t>& key, block s, uint8_t t, size_t lvl, size_t stop, BitVector& res) {
         if(lvl == stop) {
             if(t) {
-                droidCrypto::reg_arr_union tmp;
-                droidCrypto::reg_arr_union CW;
+                reg_arr_union tmp;
+                reg_arr_union CW;
                 memcpy(CW.arr, key.data()+key.size()-16, 16);
                 tmp.reg = CW.reg ^ ConvertBlock(s);
                 res.append(tmp.arr, 128);
             }
             else {
-                droidCrypto::reg_arr_union tmp;
+                reg_arr_union tmp;
                 tmp.reg = ConvertBlock(s);
                 res.append(tmp.arr, 128);
             }
@@ -206,7 +210,7 @@ namespace dpf {
         EvalFullRecursive(key, sR, tR, lvl+1, stop, res);
     }
 
-    BitVector DPF::EvalFull(const std::vector<uint8_t>& key, size_t logn) {
+    BitVector EvalFull(const std::vector<uint8_t>& key, size_t logn) {
         assert(logn <= 63);
         BitVector res;
         res.reserve(1ULL<<logn);

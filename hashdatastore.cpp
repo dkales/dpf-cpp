@@ -1,6 +1,6 @@
 #include "hashdatastore.h"
 
-#include <droidCrypto/BitVector.h>
+#include "BitVector.h"
 #include <cassert>
 
 hashdatastore::hash_type hashdatastore::answer_pir(const BitVector &indexing) const {
