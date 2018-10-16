@@ -1,12 +1,12 @@
 #pragma once
 
 #include <vector>
+#include <cstdint>
 #include <x86intrin.h>
 
 #include "alignment_allocator.h"
 
 
-class BitVector;
 class hashdatastore {
 public:
     typedef __m256i hash_type;
@@ -21,7 +21,9 @@ public:
 
     size_t size() const { return data_.size(); }
 
-    hash_type answer_pir(const BitVector& indexing) const;
+    hash_type answer_pir1(const std::vector<uint8_t>& indexing) const;
+    hash_type answer_pir2(const std::vector<uint8_t>& indexing) const;
+    hash_type answer_pir3(const std::vector<uint8_t>& indexing) const;
 
 
 private:

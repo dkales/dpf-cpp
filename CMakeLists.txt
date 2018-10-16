@@ -7,7 +7,6 @@ set(CMAKE_CXX_STANDARD 14)
 
 set(SRCS
     AES.cpp
-    BitVector.cpp
     Defines.cpp
     Log.cpp
     PRNG.cpp
@@ -24,3 +23,6 @@ SET(CMAKE_CXX_FLAGS_DEBUG  "-O0 -g -ggdb -rdynamic")
 
 add_executable(dpf_pir ${SRCS} main.cpp)
 target_link_libraries(dpf_pir crypto)
+
+add_executable(bench ${SRCS} bench.cpp)
+target_link_libraries(bench crypto)

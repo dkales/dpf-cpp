@@ -8,24 +8,24 @@
 
 namespace DPF {
     namespace prg {
-        block getL(const block& seed) {
+        inline block getL(const block& seed) {
             return mAesFixedKey.encryptECB(seed);
         }
 
-        block getR(const block& seed) {
+        inline block getR(const block& seed) {
             return mAesFixedKey2.encryptECB(seed);
         }
     }
-    block clr(block in) {
+    inline block clr(block in) {
         return in & ~MSBBlock;
     }
-    bool getT(block in) {
+    inline bool getT(block in) {
         return !is_zero(in & MSBBlock);
     }
-    bool ConvertBit(block in) {
+    inline bool ConvertBit(block in) {
         return !is_zero(in & LSBBlock);
     }
-    block ConvertBlock(block in) {
+    inline block ConvertBlock(block in) {
         return mAesFixedKey.encryptECB(in);
     }
 
@@ -173,19 +173,19 @@ namespace DPF {
         }
     }
 
-    void EvalFullRecursive(const std::vector<uint8_t>& key, block s, uint8_t t, size_t lvl, size_t stop, BitVector& res) {
+    void EvalFullRecursive(const std::vector<uint8_t>& key, block s, uint8_t t, size_t lvl, size_t stop, std::vector<uint8_t>& res) {
         if(lvl == stop) {
             if(t) {
                 reg_arr_union tmp;
                 reg_arr_union CW;
                 memcpy(CW.arr, key.data()+key.size()-16, 16);
                 tmp.reg = CW.reg ^ ConvertBlock(s);
-                res.append(tmp.arr, 128);
+                res.insert(res.end(), &tmp.arr[0], &tmp.arr[16]);
             }
             else {
                 reg_arr_union tmp;
                 tmp.reg = ConvertBlock(s);
-                res.append(tmp.arr, 128);
+                res.insert(res.end(), &tmp.arr[0], &tmp.arr[16]);
             }
             return;
         }
@@ -210,15 +210,15 @@ namespace DPF {
         EvalFullRecursive(key, sR, tR, lvl+1, stop, res);
     }
 
-    BitVector EvalFull(const std::vector<uint8_t>& key, size_t logn) {
+    std::vector<uint8_t> EvalFull(const std::vector<uint8_t>& key, size_t logn) {
         assert(logn <= 63);
-        BitVector res;
-        res.reserve(1ULL<<logn);
+        std::vector<uint8_t> data;
+        data.reserve(1ULL << (logn-3));
         block s;
         memcpy(&s, key.data(), 16);
         uint8_t t = key.data()[16];
         size_t stop = logn >=7 ? logn - 7 : 0; // pack 7 layers in final CW
-        EvalFullRecursive(key, s, t, 0, stop, res);
-        return res;
+        EvalFullRecursive(key, s, t, 0, stop, data);
+        return data;
     }
 }

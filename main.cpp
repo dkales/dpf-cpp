@@ -6,11 +6,11 @@
 
 int main(int argc, char** argv) {
 
-//    size_t N = 27;
+    size_t N = 27;
     std::chrono::duration<double> buildT, evalT, answerT;
     size_t keysizeT = 0;
     buildT = evalT = answerT = std::chrono::duration<double>::zero();
-    for(size_t N = 27; N > 5; N--) {
+    //for(size_t N = 27; N > 5; N--) {
 
         hashdatastore store;
 //    store.dummy(1ULL<<N);
@@ -38,14 +38,14 @@ int main(int argc, char** argv) {
 //    }
 //    std::cout << std::endl;
 
-        BitVector aaaa = DPF::EvalFull(a, N);
+        std::vector<uint8_t> aaaa = DPF::EvalFull(a, N);
 //        BitVector bbbb = DPF::EvalFull(b, N);
 //    for(size_t i = 0; i < (1ULL<<N); i++) {
 //        std::cout << int((aaaa^bbbb)[i]);
 //    }
 //    std::cout << std::endl;
         auto time3 = std::chrono::high_resolution_clock::now();
-        hashdatastore::hash_type answerA = store.answer_pir(aaaa);
+        hashdatastore::hash_type answerA = store.answer_pir2(aaaa);
 //        hashdatastore::hash_type answerB = store.answer_pir(bbbb);
 //        hashdatastore::hash_type answer = _mm256_xor_si256(answerA, answerB);
         auto time4 = std::chrono::high_resolution_clock::now();
@@ -54,7 +54,7 @@ int main(int argc, char** argv) {
         buildT += time2 - time1;
         evalT += time3 - time2;
         answerT += time4 - time3;
-    }
+    //}
     std::cout << buildT.count() << "sec" << std::endl;
     std::cout << evalT.count() << "sec" << std::endl;
     std::cout << answerT.count() << "sec" << std::endl;
