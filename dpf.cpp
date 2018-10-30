@@ -15,12 +15,35 @@ namespace DPF {
         inline block getR(const block& seed) {
             return mAesFixedKey2.encryptECB(seed);
         }
+        inline std::array<block,8> getL8(const std::array<block,8>& seed) {
+            std::array<block,8> out;
+            mAesFixedKey.encryptECBBlocks(seed.data(), 8, out.data());
+            return out;
+        }
+
+        inline std::array<block,8> getR8(const std::array<block,8>& seed) {
+            std::array<block,8> out;
+            mAesFixedKey2.encryptECBBlocks(seed.data(), 8, out.data());
+            return out;
+        }
     }
     inline block clr(block in) {
         return in & ~MSBBlock;
     }
     inline bool getT(block in) {
         return !is_zero(in & MSBBlock);
+    }
+    inline void clr8(std::array<block, 8>& in) {
+        for(int i = 0; i < 8; i++) {
+            in[i] &= ~MSBBlock;
+        }
+    }
+    inline std::array<uint8_t,8> getT8(const std::array<block,8>& in) {
+        std::array<uint8_t,8> out;
+        for(int i = 0; i < 8; i++) {
+            out[i] = !is_zero(in[i] & MSBBlock);
+        }
+        return out;
     }
     inline bool ConvertBit(block in) {
         return !is_zero(in & LSBBlock);
@@ -29,12 +52,17 @@ namespace DPF {
         return mAesFixedKey.encryptECB(in);
     }
 
+    inline std::array<block,8> ConvertBlock8(const std::array<block,8>& in) {
+        std::array<block,8> out;
+        mAesFixedKey.encryptECBBlocks(in.data(), 8, out.data());
+        return out;
+    }
+
     std::pair<std::vector<uint8_t>, std::vector<uint8_t>> Gen(size_t alpha, size_t logn) {
         assert(logn <= 63);
         assert(alpha < (1<<logn));
         std::vector<uint8_t> ka, kb, CW;
         PRNG p = PRNG::getTestPRNG();
-//        p.SetSeed(p.get<block>(), 2);
         block s0, s1;
         uint8_t t0, t1;
         p.get((uint8_t *) &s0, sizeof(s0));
@@ -42,8 +70,6 @@ namespace DPF {
         t0 = getT(s0);
         t1 = !t0;
 
-//        Log::v("before", s0);
-//        Log::v("before", s1);
         s0 = clr(s0);
         s1 = clr(s1);
 
@@ -198,15 +224,17 @@ namespace DPF {
         if(t) {
             block sCW;
             memcpy(&sCW, key.data() + 17 + lvl*18, 16);
+//            block* sCW = (block*) key.data() + 17 + lvl*18;
             uint8_t tLCW = key.data()[17+lvl*18+16];
             uint8_t tRCW = key.data()[17+lvl*18+17];
-            Log::v("eval", "tcw %d %d", tLCW, tRCW);
             tL^=tLCW;
             tR^=tRCW;
             sL^=sCW;
             sR^=sCW;
         }
+        Log::v("-sL", sL);
         EvalFullRecursive(key, sL, tL, lvl+1, stop, res);
+        Log::v("-sR", sR);
         EvalFullRecursive(key, sR, tR, lvl+1, stop, res);
     }
 
@@ -221,4 +249,232 @@ namespace DPF {
         EvalFullRecursive(key, s, t, 0, stop, data);
         return data;
     }
+
+    // optimized for vectorized ops
+    void EvalFullRecursive8(const std::vector<uint8_t>& key, std::array<block, 8>& s, std::array<uint8_t,8>& t, size_t lvl, size_t stop, std::array<uint8_t*,8>& res) {
+        if(lvl == stop) {
+            std::array<reg_arr_union,8> tmp;
+            reg_arr_union CW;
+            memcpy(CW.arr, key.data() + key.size() - 16, 16);
+            std::array<block, 8> conv =  ConvertBlock8(s);
+            for (int i = 0; i < 8; i++) {
+                block tt = _mm_set1_epi8(-(t[i]));
+                tmp[i].reg = conv[i] ^ (CW.reg & tt);
+                memcpy(res[i], tmp[i].arr, 16);
+                res[i] += sizeof(block);
+            }
+            return;
+        }
+        std::array<block,8> sL = prg::getL8(s);
+        std::array<uint8_t,8> tL = getT8(sL);
+        clr8(sL);
+        std::array<block,8> sR = prg::getR8(s);
+        std::array<uint8_t,8> tR = getT8(sR);
+        clr8(sR);
+        block sCW;
+        memcpy(&sCW, key.data() + 17 + lvl*18, 16);
+        uint8_t tLCW = key.data()[17+lvl*18+16];
+        uint8_t tRCW = key.data()[17+lvl*18+17];
+        for(int i = 0; i < 8; i++) {
+            tL[i] ^= (tLCW & t[i]);
+            tR[i] ^= (tRCW & t[i]);
+            block tt = _mm_set1_epi8(-(t[i]));
+            sL[i] ^= (sCW & tt);
+            sR[i] ^= (sCW & tt);
+        }
+        EvalFullRecursive8(key, sL, tL, lvl+1, stop, res);
+        EvalFullRecursive8(key, sR, tR, lvl+1, stop, res);
+    }
+
+    std::vector<uint8_t> EvalFull8(const std::vector<uint8_t>& key, size_t logn) {
+        assert(logn <= 63);
+        std::vector<uint8_t> data;
+        data.resize(1ULL << (logn - 3));
+        std::array<uint8_t*,8> data_ptrs;
+        for(size_t i = 0; i < 8; i++) {
+            data_ptrs[i] = &data[i*(1ULL << (logn - 3 - 3))];
+        }
+        block s;
+        memcpy(&s, key.data(), 16);
+        uint8_t t = key.data()[16];
+        size_t stop = logn >=7 ? logn - 7 : 0; // pack 7 layers in final CW
+        assert(stop >= 3); // need 3 or more layers for this to make sense
+        // evaluate first 3 layers
+        size_t lvl = 0;
+        block sL = prg::getL(s);
+        uint8_t tL = getT(sL);
+        sL = clr(sL);
+        block sR = prg::getR(s);
+        uint8_t tR = getT(sR);
+        sR = clr(sR);
+        if(t) {
+            block sCW;
+            memcpy(&sCW, key.data() + 17 + lvl*18, 16);
+            uint8_t tLCW = key.data()[17+lvl*18+16];
+            uint8_t tRCW = key.data()[17+lvl*18+17];
+            tL^=tLCW;
+            tR^=tRCW;
+            sL^=sCW;
+            sR^=sCW;
+        }
+
+        lvl = 1;
+        block sLL = prg::getL(sL);
+        uint8_t tLL = getT(sLL);
+        sLL = clr(sLL);
+        block sRL = prg::getR(sL);
+        uint8_t tRL = getT(sRL);
+        sRL = clr(sRL);
+        if(tL) {
+            block sCW;
+            memcpy(&sCW, key.data() + 17 + lvl*18, 16);
+            uint8_t tLCW = key.data()[17+lvl*18+16];
+            uint8_t tRCW = key.data()[17+lvl*18+17];
+            tLL^=tLCW;
+            tRL^=tRCW;
+            sLL^=sCW;
+            sRL^=sCW;
+        }
+        block sLR = prg::getL(sR);
+        uint8_t tLR = getT(sLR);
+        sLR = clr(sLR);
+        block sRR = prg::getR(sR);
+        uint8_t tRR = getT(sRR);
+        sRR = clr(sRR);
+        if(tR) {
+            block sCW;
+            memcpy(&sCW, key.data() + 17 + lvl*18, 16);
+            uint8_t tLCW = key.data()[17+lvl*18+16];
+            uint8_t tRCW = key.data()[17+lvl*18+17];
+            tLR^=tLCW;
+            tRR^=tRCW;
+            sLR^=sCW;
+            sRR^=sCW;
+        }
+
+        lvl = 2;
+        block sLLL = prg::getL(sLL);
+        uint8_t tLLL = getT(sLLL);
+        sLLL = clr(sLLL);
+        block sRLL = prg::getR(sLL);
+        uint8_t tRLL = getT(sRLL);
+        sRLL = clr(sRLL);
+        if(tLL) {
+            block sCW;
+            memcpy(&sCW, key.data() + 17 + lvl*18, 16);
+            uint8_t tLCW = key.data()[17+lvl*18+16];
+            uint8_t tRCW = key.data()[17+lvl*18+17];
+            tLLL^=tLCW;
+            tRLL^=tRCW;
+            sLLL^=sCW;
+            sRLL^=sCW;
+        }
+        block sLRL = prg::getL(sRL);
+        uint8_t tLRL = getT(sLRL);
+        sLRL = clr(sLRL);
+        block sRRL = prg::getR(sRL);
+        uint8_t tRRL = getT(sRRL);
+        sRRL = clr(sRRL);
+        if(tRL) {
+            block sCW;
+            memcpy(&sCW, key.data() + 17 + lvl*18, 16);
+            uint8_t tLCW = key.data()[17+lvl*18+16];
+            uint8_t tRCW = key.data()[17+lvl*18+17];
+            tLRL^=tLCW;
+            tRRL^=tRCW;
+            sLRL^=sCW;
+            sRRL^=sCW;
+        }
+        block sLLR = prg::getL(sLR);
+        uint8_t tLLR = getT(sLLR);
+        sLLR = clr(sLLR);
+        block sRLR = prg::getR(sLR);
+        uint8_t tRLR = getT(sRLR);
+        sRLR = clr(sRLR);
+        if(tLR) {
+            block sCW;
+            memcpy(&sCW, key.data() + 17 + lvl*18, 16);
+            uint8_t tLCW = key.data()[17+lvl*18+16];
+            uint8_t tRCW = key.data()[17+lvl*18+17];
+            tLLR^=tLCW;
+            tRLR^=tRCW;
+            sLLR^=sCW;
+            sRLR^=sCW;
+        }
+        block sLRR = prg::getL(sRR);
+        uint8_t tLRR = getT(sLRR);
+        sLRR = clr(sLRR);
+        block sRRR = prg::getR(sRR);
+        uint8_t tRRR = getT(sRRR);
+        sRRR = clr(sRRR);
+        if(tRR) {
+            block sCW;
+            memcpy(&sCW, key.data() + 17 + lvl*18, 16);
+            uint8_t tLCW = key.data()[17+lvl*18+16];
+            uint8_t tRCW = key.data()[17+lvl*18+17];
+            tLRR^=tLCW;
+            tRRR^=tRCW;
+            sLRR^=sCW;
+            sRRR^=sCW;
+        }
+        std::array<block, 8> s_array{sLLL, sRLL, sLRL, sRRL, sLLR, sRLR, sLRR, sRRR};
+        std::array<uint8_t, 8> t_array{tLLL, tRLL, tLRL, tRRL, tLLR, tRLR, tLRR, tRRR};
+
+        EvalFullRecursive8(key, s_array, t_array, 3, stop, data_ptrs);
+        return data;
+    }
+
+//    std::vector<uint8_t> EvalFullNonRec(const std::vector<uint8_t>& key, size_t logn) {
+//        assert(logn <= 63);
+//        std::vector<uint8_t> data;
+//        std::vector<block> sL_vals;
+//        std::vector<block> sR_vals;
+//        std::vector<int> tL_vals;
+//        std::vector<int> tR_vals;
+//        data.reserve(1ULL << (logn-3));
+//        block s;
+//        memcpy(&s, key.data(), 16);
+//        uint8_t t = key.data()[16];
+//        size_t stop = logn >=7 ? logn - 7 : 0; // pack 7 layers in final CW
+//
+//        for(size_t lvl = 0; lvl < stop; lvl++) {
+//            const size_t layersize = (1 << lvl);
+//            block sCW;
+//            memcpy(&sCW, key.data() + 17 + lvl * 18, 16);
+//            uint8_t tLCW = key.data()[17 + lvl * 18 + 16];
+//            uint8_t tRCW = key.data()[17 + lvl * 18 + 17];
+//            for(int j = 0; j < layersize; j++) {
+//                block sL = prg::getL(s);
+//                uint8_t tL = getT(sL);
+//                sL = clr(sL);
+//                block sR = prg::getR(s);
+//                uint8_t tR = getT(sR);
+//                sR = clr(sR);
+//                if (t) {
+//                    Log::v("eval", "tcw %d %d", tLCW, tRCW);
+//                    tL ^= tLCW;
+//                    tR ^= tRCW;
+//                    sL ^= sCW;
+//                    sR ^= sCW;
+//                }
+//            }
+//        }
+//
+//        if(lvl == stop) {
+//            if(t) {
+//                reg_arr_union tmp;
+//                reg_arr_union CW;
+//                memcpy(CW.arr, key.data()+key.size()-16, 16);
+//                tmp.reg = CW.reg ^ ConvertBlock(s);
+//                res.insert(res.end(), &tmp.arr[0], &tmp.arr[16]);
+//            }
+//            else {
+//                reg_arr_union tmp;
+//                tmp.reg = ConvertBlock(s);
+//                res.insert(res.end(), &tmp.arr[0], &tmp.arr[16]);
+//            }
+//            return;
+//        }
+//        return data;
+//    }
 }
