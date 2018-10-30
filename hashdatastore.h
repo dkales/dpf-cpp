@@ -24,6 +24,9 @@ public:
     hash_type answer_pir1(const std::vector<uint8_t>& indexing) const;
     hash_type answer_pir2(const std::vector<uint8_t>& indexing) const;
     hash_type answer_pir3(const std::vector<uint8_t>& indexing) const;
+    hash_type answer_pir4(const std::vector<uint8_t>& indexing) const;
+    hash_type answer_pir5(const std::vector<uint8_t>& indexing) const;
+    hash_type answer_pir_idea_speed_comparison(const std::vector<uint8_t>& indexing) const;
 
 
 private:
