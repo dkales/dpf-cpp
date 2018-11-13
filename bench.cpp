@@ -65,7 +65,7 @@ void benchAnswerPIR(size_t N, size_t iter) {
         auto time4 = std::chrono::high_resolution_clock::now();
         hashdatastore::hash_type answer4 = store.answer_pir4(aaaa);
         auto time5 = std::chrono::high_resolution_clock::now();
-        hashdatastore::hash_type answer5 = store.answer_pir4(aaaa);
+        hashdatastore::hash_type answer5 = store.answer_pir5(aaaa);
         auto time6 = std::chrono::high_resolution_clock::now();
         answerT[0] += time1-time0;
         answerT[1] += time2-time1;
@@ -88,8 +88,8 @@ int main(int argc, char** argv) {
 
     size_t N = 27;
     size_t iter = 100;
-//    benchEvalFull(N, iter);
-//    benchEvalFull8(N, iter);
+    benchEvalFull(N, iter);
+    benchEvalFull8(N, iter);
     benchAnswerPIR(25,100);
 
     return 0;

@@ -9,21 +9,21 @@
 namespace DPF {
     namespace prg {
         inline block getL(const block& seed) {
-            return mAesFixedKey.encryptECB(seed);
+            return mAesFixedKey.encryptECB_MMO(seed);
         }
 
         inline block getR(const block& seed) {
-            return mAesFixedKey2.encryptECB(seed);
+            return mAesFixedKey2.encryptECB_MMO(seed);
         }
         inline std::array<block,8> getL8(const std::array<block,8>& seed) {
             std::array<block,8> out;
-            mAesFixedKey.encryptECBBlocks(seed.data(), 8, out.data());
+            mAesFixedKey.encryptECB_MMO_Blocks(seed.data(), 8, out.data());
             return out;
         }
 
         inline std::array<block,8> getR8(const std::array<block,8>& seed) {
             std::array<block,8> out;
-            mAesFixedKey2.encryptECBBlocks(seed.data(), 8, out.data());
+            mAesFixedKey2.encryptECB_MMO_Blocks(seed.data(), 8, out.data());
             return out;
         }
     }
@@ -241,7 +241,8 @@ namespace DPF {
     std::vector<uint8_t> EvalFull(const std::vector<uint8_t>& key, size_t logn) {
         assert(logn <= 63);
         std::vector<uint8_t> data;
-        data.reserve(1ULL << (logn-3));
+	if(logn >= 7)
+		data.reserve(1ULL << (logn-3));
         block s;
         memcpy(&s, key.data(), 16);
         uint8_t t = key.data()[16];

@@ -27,5 +27,5 @@ target_link_libraries(dpf_pir crypto)
 add_executable(bench ${SRCS} bench.cpp)
 target_link_libraries(bench crypto)
 
-add_executable(test ${SRCS} test.cpp)
-target_link_libraries(test crypto)
+add_executable(dpf_tests ${SRCS} test.cpp)
+target_link_libraries(dpf_tests crypto)
