@@ -22,4 +22,4 @@ make
 
 ## References
 
-TODO: add
+Some parts like the AES-NI implementation are taken from Peter Rindal's public domain [CryptoTools](https://github.com/ladnir/cryptoTools/)
