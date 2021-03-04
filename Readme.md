@@ -22,4 +22,6 @@ make
 
 ## References
 
-Some parts like the AES-NI implementation are taken from Peter Rindal's public domain [CryptoTools](https://github.com/ladnir/cryptoTools/)
+Some parts like the AES-NI implementation are taken from Peter Rindal's public domain [CryptoTools](https://github.com/ladnir/cryptoTools/).
+
+[Paper](http://www.ramacher.at/_static/papers/ct-privacy.pdf): *Daniel Kales, Olamide Omolola, Sebastian Ramacher*. **Revisting User Privacy for Certificate Transparency**. EuroS&P 2019
